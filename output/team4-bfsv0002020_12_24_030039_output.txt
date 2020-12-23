@@ -1,5 +1,0 @@
-UrlId	Seed URL	Cost	Trial to success cost
-There are a total of 100 events, of which 0 events have found the Event Source Page.
-Success rate: 0.000
-Trial to success cost: 0, Trial to success average cost: 0.000
-Total cost: 0, Total average cost: 0.000

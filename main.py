@@ -1,4 +1,3 @@
-import asyncio
 import re
 import os
 import sys
@@ -29,7 +28,7 @@ jar_path = '0.0.2/event.source.page.discovery-0.0.2.jar'
 now = datetime.now()
 date_time = now.strftime("%Y_%m_%d_%H%M%S")
 #test_version = 'team4-bfsv000' + date_time
-test_version = 'team4-bfsv003'
+test_version = 'team4-bfsv004'
 
 # Selenium 初始化
 options = Options()
@@ -141,8 +140,11 @@ class Search(object):
 
         with Popen(command, stdout=PIPE, stderr=PIPE) as p:
             output, errors = p.communicate()
-
-        ans = output.decode('utf-8').splitlines()[0]
+        try:
+            ans = output.decode('utf-8').splitlines()[0]
+        except IndexError:
+            print('[Error] IndexError!')
+            return
 
         print(ans)
 
@@ -228,11 +230,6 @@ if __name__ == "__main__":
         Loop every URL in Dataset, and recursively finds URL true or false
         '''
         work_list.append((seed_ID, seed_URL))
-
-        # print("--- Current url : ", seed_URL, " ---")
-        # S = Search(seed_ID, seed_URL)
-        # S.ExtractLinks(seed_URL)
-        # S.NavieBFS(seed_URL)
 
     # 指定 multiprocessing degree, mp.cpu_count() = Logical CPU number
     p = mp.Pool(mp.cpu_count())
