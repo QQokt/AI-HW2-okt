@@ -1,0 +1,5 @@
+{
+    "python.pythonPath": "/home/okt/miniconda3/envs/ncu-ai-hw2/bin/python",
+    "python.linting.pylintEnabled": true,
+    "python.linting.enabled": true
+}
