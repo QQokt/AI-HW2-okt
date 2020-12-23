@@ -1,3 +1,4 @@
+import asyncio
 import re
 import os
 import sys
@@ -6,7 +7,6 @@ import jpype
 import subprocess
 import pandas as pd
 import xlrd
-from bs4 import BeautifulSoup
 from subprocess import Popen, PIPE, STDOUT
 from datetime import datetime
 from http import HTTPStatus
@@ -14,6 +14,8 @@ import validators
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import WebDriverException
+import multiprocessing as mp
+
 '''
 Naive BFS recursion version v001 
 '''
@@ -26,25 +28,16 @@ jar_path = '0.0.2/event.source.page.discovery-0.0.2.jar'
 # Test Version
 now = datetime.now()
 date_time = now.strftime("%Y_%m_%d_%H%M%S")
-test_version = 'team4-bfsv000' + date_time
+#test_version = 'team4-bfsv000' + date_time
+test_version = 'team4-bfsv003'
 
 # Selenium 初始化
 options = Options()
-# options.add_argument('--headless')
+options.add_argument('--headless')
 options.add_argument('--disable-gpu')
 options.add_argument('--disable-dev-shm-usage')
 options.add_argument('--no-sandbox')
 options.add_argument('blink-settings=imagesEnabled=false')  # 不載入圖片
-selenium_driver = webdriver.Chrome(options=options)
-selenium_driver.set_page_load_timeout(30)
-
-
-def get_http_domin_helper(url):
-    # url_List = ['https:', '', 'www.ncu.edu.tw', 'events', 'showevent', 'eventid', '9380']
-    url_List = url.split('/')
-    dname = url_List[0] + '//' + url_List[1] + url_List[2]
-    return dname
-
 
 def get_domin_helper(url):
     url_List = url.split('/')    # url_List = ['http:', '', 'foo.com']
@@ -115,12 +108,14 @@ class Search(object):
         self.isFound = RequestStatus.Unfininsh
         self.BFS_queue = []
         self.cost = 0
-        self.max_step = 300
+        self.max_step = 1500
         self.have_visit = set()
+        self.selenium_driver = webdriver.Chrome(options=options)
+        self.selenium_driver.set_page_load_timeout(30)
 
-        self.ExtractLinks(self.seed_URL)
-        self.NavieBFS(self.seed_URL)
-
+    def __del__(self):
+        self.selenium_driver.quit()
+        
     def SearchCallAPI(self, url):
         '''
         根據 id 與 url 去 java 看對不對
@@ -180,10 +175,10 @@ class Search(object):
         根據輸入的 URL 搜尋該網頁原始碼中的連結
         '''
         extract_queue = []
-
+        
         # 將該網頁之下的原始碼取出，且設定請求的 timeout，如果超過就放棄
         try:
-            selenium_driver.get(url)
+            self.selenium_driver.get(url)
         except:
             print('Error')
             if url == self.seed_URL:
@@ -191,7 +186,7 @@ class Search(object):
             return
 
         try:
-            elems = selenium_driver.find_elements_by_xpath("//a[@href]")
+            elems = self.selenium_driver.find_elements_by_xpath("//a[@href]")
         except:
             return
         for elem in elems:
@@ -210,6 +205,10 @@ class Search(object):
                 return
         self.BFS_queue.extend(extract_queue)
 
+def Run_Search(seed_ID, seed_URL):
+    S = Search(seed_ID, seed_URL)
+    S.ExtractLinks(seed_URL)
+    S.NavieBFS(seed_URL)
 
 if __name__ == "__main__":
     # Call jpype, 加入(建立)環境、將jar檔拉入環境
@@ -223,15 +222,25 @@ if __name__ == "__main__":
     # 匯入網址檔案(xlsx檔)
     df = pd.read_excel("Task Information.xlsx")
 
+    work_list = []
     for (_, seed_ID, seed_URL) in df.itertuples(name=None):
         ''' 
         Loop every URL in Dataset, and recursively finds URL true or false
         '''
-        print("--- Current url : ", seed_URL, " ---")
-        
-        S = Search(seed_ID, seed_URL)
+        work_list.append((seed_ID, seed_URL))
 
+        # print("--- Current url : ", seed_URL, " ---")
+        # S = Search(seed_ID, seed_URL)
+        # S.ExtractLinks(seed_URL)
+        # S.NavieBFS(seed_URL)
 
+    # 指定 multiprocessing degree, mp.cpu_count() = Logical CPU number
+    p = mp.Pool(mp.cpu_count())
+
+    # multiprocessing 執行
+    p.starmap(Run_Search, work_list)
+    p.close()
+    p.join()
     print("Done")
 
     Evaluation_API.main(['--test-version', test_version,
