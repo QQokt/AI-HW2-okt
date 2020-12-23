@@ -3,7 +3,6 @@ import os
 import sys
 import glob
 import jpype
-import requests
 import subprocess
 import pandas as pd
 import xlrd
@@ -12,7 +11,9 @@ from subprocess import Popen, PIPE, STDOUT
 from datetime import datetime
 from http import HTTPStatus
 import validators
-
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.common.exceptions import WebDriverException
 '''
 Naive BFS recursion version v001 
 '''
@@ -27,8 +28,16 @@ now = datetime.now()
 date_time = now.strftime("%Y_%m_%d_%H%M%S")
 test_version = 'team4-bfsv000' + date_time
 
-# 移除 SSL 認證
-requests.packages.urllib3.disable_warnings()
+# Selenium 初始化
+options = Options()
+# options.add_argument('--headless')
+options.add_argument('--disable-gpu')
+options.add_argument('--disable-dev-shm-usage')
+options.add_argument('--no-sandbox')
+options.add_argument('blink-settings=imagesEnabled=false')  # 不載入圖片
+selenium_driver = webdriver.Chrome(options=options)
+selenium_driver.set_page_load_timeout(30)
+
 
 def get_http_domin_helper(url):
     # url_List = ['https:', '', 'www.ncu.edu.tw', 'events', 'showevent', 'eventid', '9380']
@@ -92,7 +101,6 @@ class RequestStatus:
     Unfininsh, Finish, Fail = range(3)
 
 
-
 class Search(object):
     '''
     QQ
@@ -109,16 +117,16 @@ class Search(object):
         self.cost = 0
         self.max_step = 300
         self.have_visit = set()
-        
+
         self.ExtractLinks(self.seed_URL)
-        #self.NaiveDFS(self.seed_URL)
         self.NavieBFS(self.seed_URL)
 
-    def SearchCallAPI(self, id, url):
+    def SearchCallAPI(self, url):
         '''
         根據 id 與 url 去 java 看對不對
         '''
-        print('ID : {id} , cost = {cost} {url}'.format(id=str(id), cost = self.cost, url=url))
+        print('ID : {id} , cost = {cost} {url}'.format(
+            id=str(self.seed_ID), cost=self.cost, url=url))
         self.cost += 1
 
         command = []
@@ -130,7 +138,7 @@ class Search(object):
         command.append('--test-version')
         command.append(test_version)
         command.append('--url-id')
-        command.append(str(id))
+        command.append(str(self.seed_ID))
         command.append('--query-url')
         command.append(url)
         command.append('--anchor-text')
@@ -148,7 +156,7 @@ class Search(object):
             self.isFound = RequestStatus.Finish
 
     def NavieBFS(self, URL):
-        while(self.isFound != RequestStatus.Finish and self.isFound != RequestStatus.Fail ):
+        while(self.isFound == RequestStatus.Unfininsh):
             if(self.cost > self.max_step):
                 self.isFound = RequestStatus.Fail
                 break
@@ -163,21 +171,9 @@ class Search(object):
                     return
                 self.BFS_queue.pop(0)
                 continue
-
-            self.SearchCallAPI(self.seed_ID, self.BFS_queue[0])
             self.ExtractLinks(self.BFS_queue[0])
             self.BFS_queue.pop(0)
-            
-            
-    # def NaiveDFS(self, URL):
-    #     BFS_queue = self.ExtractLinks(URL)
-    #     for i in BFS_queue:
-    #         self.SearchCallAPI(self.seed_ID, i)
-    #         if(self.isFound):
-    #             return
-            
-    #         self.NaiveDFS(i)
-            
+
     def ExtractLinks(self, url):
         '''
         ExtractLinks
@@ -185,51 +181,33 @@ class Search(object):
         '''
         extract_queue = []
 
-        '''
-        將該網頁之下的原始碼取出，且設定請求的 timeout，如果超過就放棄
-        '''
-
-
+        # 將該網頁之下的原始碼取出，且設定請求的 timeout，如果超過就放棄
         try:
-            html_page = requests.get(url, verify=False, timeout=5)
-            if html_page.status_code != HTTPStatus.OK:
-                if url == self.seed_URL:
-                    self.isFound = RequestStatus.Fail
-                return
-
-
-        except requests.exceptions.RequestException as e:
-            print(e)
-
-            # 超時
+            selenium_driver.get(url)
+        except:
+            print('Error')
             if url == self.seed_URL:
                 self.isFound = RequestStatus.Fail
             return
 
+        try:
+            elems = selenium_driver.find_elements_by_xpath("//a[@href]")
+        except:
+            return
+        for elem in elems:
+            try:
+                link = elem.get_attribute("href")
+            except:
+                continue
+            if (validators.url(link) == True and filter_file(link) != 'x' and link not in self.have_visit):
+                print('add', link)
+                extract_queue.append(link)
+                self.have_visit.add(link)
 
-        soup = BeautifulSoup(html_page.text, "html.parser")
-
-        #  抓取 https 與 http 的連結
-        result = soup.findAll('a', href=re.compile("(^https?://)"))
-        for link in result:
-            filtered_url = filter_file(link.get('href'))
-
-            # 檢查是否已走訪
-            if (filtered_url != 'x' and link.get('href') not in self.have_visit):
-                extract_queue.append(link.get('href'))
-                self.have_visit.add(link.get('href'))
-            # print(link.get('href'))
-
-        # 抓取同個網域下的連接
-        result = soup.findAll('a', href=re.compile("^/"))
-        domin_name = get_http_domin_helper(url)
-        for link in result:
-            filtered_url = filter_file(domin_name + link.get('href'))
-            if (filtered_url != 'x' and domin_name + link.get("href") not in self.have_visit):
-                extract_queue.append(domin_name + link.get("href"))
-                self.have_visit.add(domin_name + link.get("href"))
-            #print(domin_name + link.get("href"))
-
+        for elem in extract_queue:
+            self.SearchCallAPI(elem)
+            if self.isFound == RequestStatus.Finish:
+                return
         self.BFS_queue.extend(extract_queue)
 
 
@@ -244,12 +222,13 @@ if __name__ == "__main__":
 
     # 匯入網址檔案(xlsx檔)
     df = pd.read_excel("Task Information.xlsx")
+
     for (_, seed_ID, seed_URL) in df.itertuples(name=None):
         ''' 
         Loop every URL in Dataset, and recursively finds URL true or false
         '''
         print("--- Current url : ", seed_URL, " ---")
-
+        
         S = Search(seed_ID, seed_URL)
 
 

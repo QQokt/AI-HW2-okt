@@ -1,5 +1,5 @@
 {
-    "python.pythonPath": "/home/okt/miniconda3/envs/ncu-ai-hw2/bin/python",
+    "python.pythonPath": "E:\\Programs File\\Anaconda\\envs\\ncu-ai-hw2\\python.exe",
     "python.linting.pylintEnabled": true,
     "python.linting.enabled": true
 }
