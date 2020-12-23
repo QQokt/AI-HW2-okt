@@ -107,7 +107,7 @@ class Search(object):
         self.isFound = RequestStatus.Unfininsh
         self.BFS_queue = []
         self.cost = 0
-        self.max_step = 1500
+        self.max_step = 300
         self.have_visit = set()
         self.selenium_driver = webdriver.Chrome(options=options)
         self.selenium_driver.set_page_load_timeout(30)
