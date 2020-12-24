@@ -28,7 +28,7 @@ jar_path = '0.0.2/event.source.page.discovery-0.0.2.jar'
 now = datetime.now()
 date_time = now.strftime("%Y_%m_%d_%H%M%S")
 #test_version = 'team4-bfsv000' + date_time
-test_version = 'team4-bfsv004'
+test_version = 'team4-bfsv005'
 
 # Selenium 初始化
 options = Options()
@@ -37,6 +37,7 @@ options.add_argument('--disable-gpu')
 options.add_argument('--disable-dev-shm-usage')
 options.add_argument('--no-sandbox')
 options.add_argument('blink-settings=imagesEnabled=false')  # 不載入圖片
+
 
 def get_domin_helper(url):
     url_List = url.split('/')    # url_List = ['http:', '', 'foo.com']
@@ -107,14 +108,14 @@ class Search(object):
         self.isFound = RequestStatus.Unfininsh
         self.BFS_queue = []
         self.cost = 0
-        self.max_step = 300
+        self.max_step = 200
         self.have_visit = set()
         self.selenium_driver = webdriver.Chrome(options=options)
         self.selenium_driver.set_page_load_timeout(30)
 
     def __del__(self):
         self.selenium_driver.quit()
-        
+
     def SearchCallAPI(self, url):
         '''
         根據 id 與 url 去 java 看對不對
@@ -177,7 +178,7 @@ class Search(object):
         根據輸入的 URL 搜尋該網頁原始碼中的連結
         '''
         extract_queue = []
-        
+
         # 將該網頁之下的原始碼取出，且設定請求的 timeout，如果超過就放棄
         try:
             self.selenium_driver.get(url)
@@ -205,12 +206,51 @@ class Search(object):
             self.SearchCallAPI(elem)
             if self.isFound == RequestStatus.Finish:
                 return
+        extract_queue.sort(key=self.editDistDP)
         self.BFS_queue.extend(extract_queue)
+
+    def editDistDP(self, str2):
+        s1 = self.seed_URL.split('/')
+        str1 = '/'.join(s1[:len(s1)-1])
+        m = len(str1)
+        n = len(str2)
+        # Create a table to store results of subproblems
+        dp = [[0 for x in range(n + 1)] for x in range(m + 1)]
+
+        # Fill d[][] in bottom up manner
+        for i in range(m + 1):
+            for j in range(n + 1):
+
+                # If first string is empty, only option is to
+                # insert all characters of second string
+                if i == 0:
+                    dp[i][j] = j    # Min. operations = j
+
+                # If second string is empty, only option is to
+                # remove all characters of second string
+                elif j == 0:
+                    dp[i][j] = i    # Min. operations = i
+
+                # If last characters are same, ignore last char
+                # and recur for remaining string
+                elif str1[i-1] == str2[j-1]:
+                    dp[i][j] = dp[i-1][j-1]
+
+                # If last character are different, consider all
+                # possibilities and find minimum
+                else:
+                    dp[i][j] = 1 + min(dp[i][j-1],        # Insert
+                                    dp[i-1][j],        # Remove
+                                    dp[i-1][j-1])    # Replace
+
+        return dp[m][n]
+
 
 def Run_Search(seed_ID, seed_URL):
     S = Search(seed_ID, seed_URL)
     S.ExtractLinks(seed_URL)
     S.NavieBFS(seed_URL)
+
 
 if __name__ == "__main__":
     # Call jpype, 加入(建立)環境、將jar檔拉入環境
